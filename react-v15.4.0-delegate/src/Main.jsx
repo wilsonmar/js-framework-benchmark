@@ -23,6 +23,16 @@ var stopMeasure = function() {
     }
 }
 
+var getParentId = function(elem) {
+    while (elem) {
+        if (elem.tagName==="TR") {
+            return parseInt(elem.getAttribute("data-id"));
+        }
+        elem = elem.parentNode;
+    }
+    return undefined;
+}
+
 export class Main extends React.Component{
     constructor(props) {
         super(props);
@@ -37,6 +47,7 @@ export class Main extends React.Component{
         this.swapRows = this.swapRows.bind(this);
         this.cycleDown = this.cycleDown.bind(this);
         this.cycleUp = this.cycleUp.bind(this);
+        this.onClick = this.onClick.bind(this);
         this.start = 0;
     }
     printDuration() {
@@ -64,7 +75,7 @@ export class Main extends React.Component{
         this.setState({store: this.state.store});
     }
     select(id) {
-        startMeasure("select");
+        startMeasure("select",id);
         this.state.store.select(id);
         this.setState({store: this.state.store});
     }
@@ -100,6 +111,17 @@ export class Main extends React.Component{
         // elems[elems.length-1].style = "background-color:#cdc";
         this.state.store.cycleUp();
         this.setState({store: this.state.store});
+    }
+    onClick(e) {
+		if (e.target.className.indexOf('remove')>-1) {
+			e.preventDefault();
+			let id = getParentId(e.target);
+			this.delete(id);
+		} else if (e.target.tagName=='A') {
+			e.preventDefault();
+			let data_id = getParentId(e.target);
+			this.select(data_id);
+		}
     }
     render () {
         let rows = this.state.store.data.map((d,i) => {

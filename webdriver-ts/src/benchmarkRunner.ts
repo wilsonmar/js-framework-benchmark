@@ -34,17 +34,23 @@ function readLogs(driver: WebDriver): promise.Promise<Timingresult[]> {
         let click : Timingresult = null;
         let lastPaint : Timingresult = null;
         let mem : Timingresult = null;
+        let load : Timingresult = null;
         let results = entries.forEach(x => 
         {
             let e = JSON.parse(x.message).message;
-            if (config.LOG_DEBUG) console.log(e);
-            if (e.params.name==='EventDispatch') {
+            // console.log(e);
+            if (e.method==='Page.loadEventFired') {
+                load = {type:'load', ts: e.params.timestamp / 1000.0, dur: e.params.timestamp / 1000.0};
+                console.log("load", load);
+            }
+            else if (e.params.name==='EventDispatch') {
                 if (e.params.args.data.type==="click") {
                     let end = +e.params.ts+e.params.dur;
                     click = {type:'click', ts: +e.params.ts, dur: +e.params.dur, end: end};
                 }
             } else if (e.params.name==='Paint') {
                 if (click && e.params.ts > click.end) {
+                    console.log("paint", e.params);
                     lastPaint = {type:'paint', ts: +e.params.ts, dur: +e.params.dur, end: +e.params.ts+e.params.dur};
                 }
             } else if (e.params.name==='MajorGC' && e.params.args.usedHeapSizeAfter) {
@@ -73,7 +79,8 @@ function buildDriver() {
 }
 
 function reduceBenchmarkResults(benchmark: Benchmark, results: Timingresult[][]): number[] {
-    if (config.LOG_DETAILS) console.log("data for reduceBenchmarkResults", results);
+    // if (config.LOG_DETAILS) 
+    console.log("data for reduceBenchmarkResults", results);
         if (benchmark.type === BenchmarkType.CPU) {
             return results.reduce((acc: number[], val: Timingresult[]): number[] => acc.concat((val[1].end - val[0].ts)/1000.0), []);
         } else {
@@ -90,7 +97,16 @@ function runBenchmark(driver: WebDriver, benchmark: Benchmark, framework: string
             }            
         })
         .then(() => readLogs(driver))
-        .then((results) => {if (config.LOG_PROGRESS) console.log(`result ${framework}_${benchmark.id}`, results); return results});
+        .then((results) => {if (config.LOG_PROGRESS) console.log(`result ${framework}_${benchmark.id}`, results); return results})
+        .thenCatch( (err) => {
+            console.log(`error in runBenchmark ${framework} ${benchmark.id}`);
+            return new Promise((resolve, reject) => {
+                driver.takeScreenshot().then(image => {
+                    fs.writeFileSync(`runBenchmark${Date.now()}.png`, image, 'base64');
+                    reject(`error in runBenchmark ${framework} ${benchmark.id} ${err}`);
+                });
+            });
+        });
 }
 
 function initBenchmark(driver: WebDriver, benchmark: Benchmark, framework: string) : promise.Promise<any> {
@@ -103,7 +119,12 @@ function initBenchmark(driver: WebDriver, benchmark: Benchmark, framework: strin
     })
     .thenCatch( (err) => {
         console.log(`error in initBenchmark ${framework} ${benchmark.id}`);
-        throw err;
+        return new Promise((resolve, reject) => {
+            driver.takeScreenshot().then(image => {
+                fs.writeFileSync(`initBenchmark${Date.now()}.png`, image, 'base64');
+                reject(`error in initBenchmark ${framework} ${benchmark.id} ${err}`);
+            });
+        });
     });
 }
 
@@ -137,6 +158,14 @@ function writeResult(res: Result, dir: string) {
 function runBench(frameworkNames: string[], benchmarkNames: string[], dir: string): promise.Promise<any> {
     let runFrameworks = frameworks.filter(f => frameworkNames.some(name => f.name.indexOf(name)>-1));
     let runBenchmarks = benchmarks.filter(b => benchmarkNames.some(name => b.id.toLowerCase().indexOf(name)>-1));
+
+    if (runFrameworks.length==0) {
+        throw "No frameworks selected";
+    }
+    if (runBenchmarks.length==0) {
+        throw "No benchmarks selected";
+    }
+
     console.log("Frameworks that will be benchmarked", runFrameworks);
     console.log("Benchmarks that will be run", runBenchmarks.map(b => b.id));
 

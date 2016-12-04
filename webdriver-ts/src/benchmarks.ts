@@ -29,12 +29,13 @@ const benchReplaceAll: Benchmark = {
     label: "replace all rows",
     description: "Duration for updating all 1000 rows of the table (with "+config.WARMUP_COUNT+" warmup iterations).",
     type: BenchmarkType.CPU,
-    init: (driver: WebDriver) =>
-            testElementLocatedById(driver,'run')
-            .then(() => forProm(0, config.WARMUP_COUNT, () => clickElementById(driver,'run'))),
-    run: (driver: WebDriver) => 
-            clickElementById(driver,'run')
-            .then(() => testTextContains(driver,'//tbody/tr[1]/td[1]','5001'))            
+    init: (driver: WebDriver) => 
+            testElementLocatedById(driver,'add')
+                .then(() => clickElementById(driver,'add'))
+                .then(() => { console.log("before for"); return forProm(0, config.WARMUP_COUNT, () => clickElementById(driver,'updateall'));})
+                ,
+    run: (driver: WebDriver) => clickElementById(driver,'updateall')
+            .then(() => testTextContains(driver,'//tbody/tr[1000]/td[2]/a', ' !!!'.repeat(config.WARMUP_COUNT+1)))    
 }
 
 const benchUpdate: Benchmark = { 
@@ -43,8 +44,8 @@ const benchUpdate: Benchmark = {
     description: "Time to update the text of every 10th row (with "+config.WARMUP_COUNT+" warmup iterations).",
     type: BenchmarkType.CPU,
     init: (driver: WebDriver) =>
-            testElementLocatedById(driver,"run")
-            .then(() => clickElementById(driver,'run'))
+            testElementLocatedById(driver,"add")
+            .then(() => clickElementById(driver,'add'))
             .then(() => forProm(0, config.WARMUP_COUNT, () => clickElementById(driver,'update'))),
     run: (driver: WebDriver) => 
             clickElementById(driver,'update')
@@ -57,8 +58,8 @@ const benchSelect: Benchmark = {
     description: "Duration to highlight a row in response to a click on the row. (with "+config.WARMUP_COUNT+" warmup iterations).",
     type: BenchmarkType.CPU,
     init: (driver: WebDriver) =>
-            testElementLocatedById(driver,"run")
-            .then(() => clickElementById(driver,'run'))
+            testElementLocatedById(driver,"add")
+            .then(() => clickElementById(driver,'add'))
             .then(() => testElementLocatedByXpath(driver,"//tbody/tr[1]/td[2]/a"))
             .then(() =>forProm(0, config.WARMUP_COUNT, (i) => clickElementByXPath(driver,`//tbody/tr[${i+1}]/td[2]/a`))),
     run: (driver: WebDriver) => 
@@ -73,8 +74,8 @@ const benchSwapRows: Benchmark = {
     type: BenchmarkType.CPU,
     init: (driver: WebDriver) => {
             let text = '';
-            return testElementLocatedById(driver,"run")
-            .then(() => clickElementById(driver,'run'))
+            return testElementLocatedById(driver,"add")
+            .then(() => clickElementById(driver,'add'))
             .then(() => testElementLocatedByXpath(driver,"//tbody/tr[1]/td[2]/a"))
             .then(() => forProm(0, config.WARMUP_COUNT, () => 
                 getTextByXPath(driver,"//tbody/tr[5]/td[2]/a")
@@ -97,13 +98,13 @@ const benchRemove: Benchmark = {
     description: "Duration to remove a row. (with "+config.WARMUP_COUNT+" warmup iterations).",
     type: BenchmarkType.CPU,
     init: (driver: WebDriver) =>
-            testElementLocatedById(driver, "run")
-            .then(() => clickElementById(driver, 'run'))
+            testElementLocatedById(driver, "add")
+            .then(() => clickElementById(driver, 'add'))
             .then(() => testElementLocatedByXpath(driver, "//tbody/tr[1]/td[2]/a"))
             .then(() => forProm(0, config.WARMUP_COUNT, (i) => {
                 let text = '';
                 return getTextByXPath(driver, `//tbody/tr[${config.WARMUP_COUNT-i+4}]/td[2]/a`)
-                .then(val => text = val )
+                .then(val => {text = val; console.log(`//tbody/tr[${config.WARMUP_COUNT-i+4}]/td[2]/a = ${text}`);} )
                 .then(() => clickElementByXPath(driver, `//tbody/tr[${config.WARMUP_COUNT-i+4}]/td[3]/a/span[1]`))
                 .then(() => testTextNotContained(driver, `//tbody/tr[${config.WARMUP_COUNT-i+4}]/td[2]/a`, text));
                 //     return clickElementByXPath(driver, `//tbody/tr[${config.WARMUP_COUNT-i+4}]/td[3]/a`) 
@@ -118,15 +119,116 @@ const benchRemove: Benchmark = {
     }
 }
 
+const benchCycleUp: Benchmark = { 
+    id:"11_cycle-up-1k",
+    label: "cycle up",
+    description: "Duration to cycle the list up.",
+    type: BenchmarkType.CPU,
+    init: (driver: WebDriver) =>
+            testElementLocatedById(driver, "add")
+            .then(() => clickElementById(driver, 'add'))
+            .then(() => forProm(0, config.WARMUP_COUNT, (i) => {
+                let text = '';
+                return getTextByXPath(driver, "//tbody/tr[1]/td[2]/a")
+                .then(() => clickElementById(driver, 'cycleup'))
+                .then(() => testTextContains(driver, `//tbody/tr[1000]/td[2]/a`, text));
+                }
+        )),            
+    run: (driver: WebDriver) => {
+            let text = '';
+            return getTextByXPath(driver, "//tbody/tr[1]/td[2]/a")
+            .then(val => text = val)
+            .then(() => clickElementById(driver, 'cycleup'))            
+            .then(() => testTextContains(driver, "//tbody/tr[1000]/td[2]/a", text));
+    }
+}
+
+const benchCycleDown: Benchmark = { 
+    id:"12_cycle-down-1k",
+    label: "cycle down",
+    description: "Duration to cycle the list down.",
+    type: BenchmarkType.CPU,
+    init: (driver: WebDriver) =>
+            testElementLocatedById(driver, "add")
+            .then(() => clickElementById(driver, 'add'))
+            .then(() => forProm(0, config.WARMUP_COUNT, (i) => {
+                let text = '';
+                return getTextByXPath(driver, "//tbody/tr[1000]/td[2]/a")
+                .then(() => clickElementById(driver, 'cycledown'))
+                .then(() => testTextContains(driver, `//tbody/tr[1]/td[2]/a`, text));
+                }
+        )),            
+    run: (driver: WebDriver) => {
+            console.log("***");
+            let text = '';
+            return getTextByXPath(driver, "//tbody/tr[1000]/td[2]/a")
+            .then(val => {text = val; console.log(`*//tbody/tr[1000]/td[2]/a = ${text}`);} )
+            .then(() => clickElementById(driver, 'cycledown'))            
+            .then(() => testTextContains(driver, "//tbody/tr[1]/td[2]/a", text));
+    }
+}
+
+const benchCycleUpBig: Benchmark = { 
+    id:"13_cycle-up-10k",
+    label: "cycle up (large)",
+    description: "Duration to cycle the list up.",
+    type: BenchmarkType.CPU,
+    init: (driver: WebDriver) =>
+            testElementLocatedById(driver, "add")
+            .then(() => clickElementById(driver, 'addmany'))
+            .then(() => forProm(0, config.WARMUP_COUNT, (i) => {
+                let text = '';
+                return getTextByXPath(driver, "//tbody/tr[1]/td[2]/a")
+                .then(val => {text = val; console.log(`//tbody/tr[1]/td[2]/a = ${text}`);} )
+                .then(() => clickElementById(driver, 'cycleup'))
+                .then(() => testTextContains(driver, `//tbody/tr[10000]/td[2]/a`, text));
+                }
+        )),            
+    run: (driver: WebDriver) => {
+            let text = '';
+            return getTextByXPath(driver, "//tbody/tr[1]/td[2]/a")
+            .then(val => text = val)
+            .then(() => clickElementById(driver, 'cycleup'))            
+            .then(() => testTextContains(driver, "//tbody/tr[10000]/td[2]/a", text));
+    }
+}
+
+const benchCycleDownBig: Benchmark = { 
+    id:"14_cycle-down-10k",
+    label: "cycle down (large)",
+    description: "Duration to cycle the list down.",
+    type: BenchmarkType.CPU,
+    init: (driver: WebDriver) =>
+            testElementLocatedById(driver, "add")
+            .then(() => clickElementById(driver, 'addmany'))
+            .then(() => forProm(0, config.WARMUP_COUNT, (i) => {
+                let text = '';
+                return getTextByXPath(driver, "//tbody/tr[10000]/td[2]/a")
+                .then(val => {text = val; console.log(`//tbody/tr[10000]/td[2]/a = ${text}`);} )
+                .then(() => clickElementById(driver, 'cycledown'))
+                .then(() => testTextContains(driver, `//tbody/tr[1]/td[2]/a`, text));
+                }
+        )),            
+    run: (driver: WebDriver) => {
+            console.log("***");
+            let text = '';
+            return getTextByXPath(driver, "//tbody/tr[10000]/td[2]/a")
+            .then(val => {text = val; console.log(`*//tbody/tr[10000]/td[2]/a = ${text}`);} )
+            .then(() => clickElementById(driver, 'cycledown'))            
+            .then(() => testTextContains(driver, "//tbody/tr[1]/td[2]/a", text));
+    }
+}
+
+
 const benchRunBig: Benchmark = { 
     id: "07_create10k",
     label: "create many rows",
     description: "Duration to create 10,000 rows",
     type: BenchmarkType.CPU,
     init: (driver: WebDriver) =>
-            testElementLocatedById(driver, "runlots"),
+            testElementLocatedById(driver, "addmany"),
     run: (driver: WebDriver) => 
-            clickElementById(driver, 'runlots')
+            clickElementById(driver, 'addmany')
             .then(() => testElementLocatedByXpath(driver, "//tbody/tr[10000]/td[2]/a"))
 }
 
@@ -136,8 +238,8 @@ const benchAppendToManyRows: Benchmark = {
     description: "Duration for adding 1000 rows on a table of 10,000 rows.",
     type: BenchmarkType.CPU,
     init: (driver: WebDriver) =>
-            testElementLocatedById(driver, "runlots")
-            .then(() => clickElementById(driver, 'runlots'))
+            testElementLocatedById(driver, "addmany")
+            .then(() => clickElementById(driver, 'addmany'))
             .then(() => testElementLocatedByXpath(driver, "//tbody/tr[10000]/td[2]/a")),
     run: (driver: WebDriver) => 
             clickElementById(driver, 'add')
@@ -150,8 +252,8 @@ const benchClear: Benchmark = {
     description: "Duration to clear the table filled with 10.000 rows.",
     type: BenchmarkType.CPU,
     init: (driver: WebDriver) =>
-            testElementLocatedById(driver, "runlots")
-            .then(() => clickElementById(driver, 'runlots'))
+            testElementLocatedById(driver, "addmany")
+            .then(() => clickElementById(driver, 'addmany'))
             .then(() => testElementLocatedByXpath(driver, "//tbody/tr[10000]/td[2]/a")),
     run: (driver: WebDriver) => 
             clickElementById(driver, 'clear')
@@ -164,12 +266,12 @@ const benchClear2nd: Benchmark = {
     description: "Time to clear the table filled with 10.000 rows. But warmed up with only one iteration.",
     type: BenchmarkType.CPU,
     init: (driver: WebDriver) =>
-            testElementLocatedById(driver, "runlots")
-            .then(() => clickElementById(driver, 'runlots'))
+            testElementLocatedById(driver, "addmany")
+            .then(() => clickElementById(driver, 'addmany'))
             .then(() => testElementLocatedByXpath(driver, "//tbody/tr[10000]/td[2]/a"))
             .then(() => clickElementById(driver, 'clear'))
             .then(() =>  testElementNotLocatedByXPath(driver, "//tbody/tr[1]")) 
-            .then(() => clickElementById(driver, 'runlots'))
+            .then(() => clickElementById(driver, 'addmany'))
             .then(() => testElementLocatedByXpath(driver, "//tbody/tr[10000]/td[2]/a")),
     run: (driver: WebDriver) => 
             clickElementById(driver, 'clear')
@@ -195,7 +297,7 @@ const benchRunMemory: Benchmark = {
     init: (driver: WebDriver) =>
            testElementLocatedById(driver, "add"),
     run: (driver: WebDriver) => 
-            clickElementById(driver, 'run')
+            clickElementById(driver, 'add')
             .then(() => testElementLocatedByXpath(driver, "//tbody/tr[1]/td[2]/a"))
 }
 
@@ -209,7 +311,11 @@ export let benchmarks : [ Benchmark ] = [
     benchRunBig,
     benchAppendToManyRows,
     benchClear,
-    benchClear2nd,
+//     benchClear2nd,
+    benchCycleUp,
+    benchCycleDown,
+    benchCycleUpBig,
+    benchCycleDownBig,
     benchReadyMemory,
     benchRunMemory
     ];

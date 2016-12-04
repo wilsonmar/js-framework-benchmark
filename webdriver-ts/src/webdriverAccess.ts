@@ -41,9 +41,13 @@ function findByXPath(node: webdriver.WebElement, path: string): webdriver.promis
     let paths = convertPath(path);
     let n = promise.fulfilled(node);
     for (let p of paths) {
-        // n = n.then(nd => nd.findElements(By.tagName(p.tagName))).then(elems => { // costly since it fetches all elements
-        n = n.then(nd => nd.findElements(By.css(p.tagName+":nth-child("+(p.index)+")"))).then(elems => {
-            if (elems.length==0) { console.log("not found"); return null}; //throw "Element not found "+p.tagName+"["+p.index+"]";
+        // n = n.then(nd => nd.findElements(By.tagName(p.tagName))).then(elems => { // costly since it fetches all elements        
+        n = n.then(nd => { 
+                if (!nd) throw "findByXPath: "+path+" not found";
+                return nd.findElements(By.css(p.tagName+":nth-child("+(p.index)+")"));
+            }
+        ).then(elems => {
+            if (elems.length==0) { console.log("findByXPath: "+path+" not found"); throw "findByXPath: "+path+" not found";} 
             return elems[0];
         });
     }
@@ -54,21 +58,24 @@ function findByXPath(node: webdriver.WebElement, path: string): webdriver.promis
 // thus we're using a safer way here:
 export function testTextContains(driver: WebDriver, xpath: string, text: string) {
     return driver.wait(new until.Condition<boolean>(`testTextContains ${xpath} ${text}`,
-        (driver) => shadowRoot(driver).then(elem => findByXPath(elem, xpath))
+        (driver) => {return shadowRoot(driver).then(elem => findByXPath(elem, xpath))
             .then(elem => elem.getText().then(
                 v => v && v.indexOf(text)>-1,
                 err => console.log("ignoring error in testTextContains for xpath = "+xpath+" text = "+text,err.toString().split("\n")[0])
-        ))                        
+            ))
+            .thenCatch(err => false); 
+        }                        
     ), config.TIMEOUT);        
 }
 
 export function testTextNotContained(driver: WebDriver, xpath: string, text: string) {
     return driver.wait(new until.Condition<boolean>(`testTextNotContained ${xpath} ${text}`,
-        (driver) => shadowRoot(driver).then(elem => findByXPath(elem, xpath))
+        (driver) => {console.log("testTextNotContained ",xpath, text); return shadowRoot(driver).then(elem => findByXPath(elem, xpath))
             .then(elem => elem.getText()).then(
-                v => v && v.indexOf(text)==-1,
-                err => console.log("ignoring error in testTextNotContained for xpath = "+xpath+" text = "+text,err.toString().split("\n")[0])
-            )                        
+                v => {console.log("getText", v); return v && v.indexOf(text)==-1;},
+                err => console.log("ignoring error in testTextNotContained for xpath = "+xpath+" text = "+text,err.toString().split("\n")[0]))                
+            .thenCatch(err => false);
+        } 
         ), config.TIMEOUT);        
 }
 
@@ -77,8 +84,9 @@ export function testClassContains(driver: WebDriver, xpath: string, text: string
         (driver) => shadowRoot(driver).then(elem => findByXPath(elem, xpath))
             .then(elem => elem.getAttribute("class")).then(
             v => v && v.indexOf(text)>-1,
-            err => console.log("ignoring error in testClassContains for xpath = "+xpath+" text = "+text,err.toString().split("\n")[0])
-        )), config.TIMEOUT); 
+            err => console.log("ignoring error in testClassContains for xpath = "+xpath+" text = "+text,err.toString().split("\n")[0]))
+            .thenCatch(err => false)
+        ), config.TIMEOUT); 
 }
 
 export function testElementLocatedByXpath(driver: WebDriver, xpath: string) {
@@ -86,8 +94,9 @@ export function testElementLocatedByXpath(driver: WebDriver, xpath: string) {
     return driver.wait(new until.Condition<boolean>(`testElementLocatedByXpath ${xpath}`, (driver) => 
             shadowRoot(driver).then(elem => 
                     findByXPath(elem, xpath)).then(
-                    (v:any) => v,
-                    (err:any) => console.log("ignoring error in testElementLocatedByXpath for xpath = "+xpath,err.toString()))            
+                        (v:any) => v,
+                        (err:any) => console.log("ignoring error in testElementLocatedByXpath for xpath = "+xpath,err.toString()))
+                    .thenCatch(err => false)                        
         ), config.TIMEOUT); 
 }
 
@@ -99,7 +108,7 @@ export function testElementNotLocatedByXPath(driver: WebDriver, xpath: string)
                     return findByXPath(elem, xpath)
         }).then(
             v => !v,
-            err => console.log("ignoring error in testElementNotLocatedByXPath for xpath = "+xpath,err.toString().split("\n")[0]))
+            err => true)
         ), config.TIMEOUT);
 }
 
@@ -152,7 +161,7 @@ export function clickElementByXPath(driver: WebDriver, xpath: string) {
     return retry(5, driver, (driver)=> { count++; 
             if (count>1 && config.LOG_DETAILS) console.log("clickElementByXPath ",xpath," attempt #",count);
             return shadowRoot(driver).then(elem =>  
-            findByXPath(elem, xpath)).then(elem => elem.click() ); });
+            findByXPath(elem, xpath)).then(elem => elem.click() ) });
     // Stale element possible:
     // return to(driver.findElement(By.xpath(xpath)).click());
 }
